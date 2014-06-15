@@ -4,8 +4,8 @@ Configuration file for dynamic hashtag
 
 
 # MySQL access data
-MYSQL_HOST = ""
-MYSQL_USER = ""
+MYSQL_HOST = "127.0.0.1"
+MYSQL_USER = "root"
 MYSQL_PWD = ""
 MYSQL_DB = ""
 
