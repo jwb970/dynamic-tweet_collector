@@ -10,8 +10,8 @@ MYSQL_PWD = ""
 MYSQL_DB = ""
 
 # Parameters for Dynamic Hashtag
-WINDOW_SIZE = 20
-REMODEL = 4
+WINDOW_SIZE = 2000
+REMODEL = 1000
 TOP_K = 30
 LANGUAGE = ['english']
 

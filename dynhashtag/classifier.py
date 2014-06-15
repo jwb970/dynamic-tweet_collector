@@ -32,7 +32,7 @@ class SampleStreamListener(StreamListener):
     Used to get a sample of size @param required_size of random tweets
     """
     def __init__(self, required_size):
-        super(StreamListener).__init__()
+        StreamListener.__init__(self)
         self.required_size = required_size
         self.sample = []
 
@@ -141,7 +141,6 @@ class AdaptiveTweetClassifierTrainer(object):
         """
         Get a negative sample of tweets (filtering with
         the exclusion terms)
-        :type self: object
         :param size:
         """
         sample = self.get_random_sample(size)
@@ -174,7 +173,7 @@ class AdaptiveTweetClassifierTrainer(object):
             features = self.get_feature_vector(tweet)
             feature_tweets.append(features)
 
-        target = [1 for x in range(len(sample))]
+        target = [1.0 for x in range(len(sample))]
 
         return feature_tweets, target
 
@@ -218,13 +217,13 @@ class AdaptiveTweetClassifierTrainer(object):
 
     def get_random_sample(self, size):
         """
-        Get a random sample of tweets for T_n (10x size of T_b)
+        Get a random sample of tweets for T_n (10x size of T_b): We need a json? Sampling is
         """
         auth = OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
         auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
         l = SampleStreamListener(size)
         stream = Stream(auth, l)
-        stream.sample(async=True)
+        stream.sample()
         tweets = l.get_sample()
 
         return tweets
@@ -245,18 +244,23 @@ class AdaptiveTweetClassifierTrainer(object):
         @return list: feature vector
         """
         text = tweet['text']
-        hashtags, user_mentions = extract_entity(tweet)
+        hashtags, user_mentions, urls = extract_entity(tweet)
+        user_mentions.append(tweet['user']['str_id'])
 
         filtered_text = []
 
         # remove hashtags from text
         text_tokenized = word_tokenize(text)
-        for term in text_tokenized:
+        text_cleaned = clean_entity(text_tokenized)
+        for term in text_cleaned:
             if term not in self.stop_words:
                 filtered_text.append(term)
 
-        term_features = [1.0 if term in self.query_set['keyword'] else 0 for term in filtered_text]
-        user_features = [1.0 if user in self.query_set['user'] else 0 for user in user_mentions]
+        filtered_text.extend(hashtags)
+
+        term_features = [1.0 if term in filtered_text else 0.0 for term in self.query_set['keyword']]
+        user_features = [1.0 if user in user_mentions else 0.0 for user in self.query_set['user']]
+        #TODO: include users as well?
         missed = float(sum(term_features)) / len(filtered_text)
 
         user_features.append(missed)

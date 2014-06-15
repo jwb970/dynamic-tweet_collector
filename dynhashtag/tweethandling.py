@@ -2,8 +2,9 @@
 Handles new tweets
 """
 import MySQLdb
-
 import Queue
+
+from datetime import datetime
 from threading import Timer, Thread
 from tweepy import OAuthHandler
 from tweepy import Stream
@@ -13,7 +14,7 @@ from dynhashtag.config import (MYSQL_DB, MYSQL_USER, MYSQL_PWD, MYSQL_HOST,
     REMODEL, CONSUMER_SECRET, CONSUMER_KEY, ACCESS_TOKEN_SECRET,
     ACCESS_TOKEN)
 from dynhashtag.classifier import AdaptiveTweetClassifierTrainer
-from dynhashtag.util import extract_entity
+from dynhashtag.util import extract_entity, join_entity
 
 
 class TweetStreamListener(StreamListener):
@@ -77,37 +78,37 @@ class TweetStreamListener(StreamListener):
         Format:
 
         """
-        if 'text' not in data or not self.classifier:
+        print data
+        print data.text
+        if not data.text:
             return
-
-        features = trainer.get_feature_vector(data)
-        if not self.classifier.predict(features):
+        #features = trainer.get_feature_vector(data._json)
+        if self.classifier and not self.classifier.predict(features):
             return
 
         print "Tweet arriving"
 
-        hashtags, user_mentions = extract_entity(data)
-        tweet = data['text']
-        user_id = data['user']['id_str']
+        hashtags, user_mentions, urls = join_entity(data._json)
+
+        user = data.author
 
         # BUG in python (fixed in python 3.2): %z not supported in strptime
-        date = data['created_at'].strptime("%a %b %d %H:%M:%S +0000 %Y")
         statement = "%s;%s" % (self.insert_tweet_query, self.insert_user_query)
 
         try:
             cursor = self.connection.cursor()
             cursor.execute(statement, (
-                data['id'], user_id, date.strftime("%Y-%m-%d %H:%M:%S"),
-                data['in_reply_to_user_id_str'], data['in_reply_to_status_id_str'],
-                data['retweeted'], data['favorited'], data['favorite_count'],
-                data['retweet_count'], data['source'], tweet, data['urls'], hashtags,
-                user_mentions, user_id, data['user']['created_at'], data['user']['description'],
-                data['user']['favourites_count'], data['user']['followers_count'],
-                data['user']['friends_count'], data['user']['statuses_count'],
-                data['user']['listed_count'], data['user']['time_zone'],
-                data['user']['verified'], data['user']['geo_enabled'],
-                data['user']['lang'], data['user']['location'],
-                data['user']['screen_name']))
+                data.id, user.id, data.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                data.in_reply_to_user_id_str, data.in_reply_to_status_id_str,
+                data.retweeted, data.favorited, data.favorite_count,
+                data.retweet_count, data.source, data.text, urls, hashtags,
+                user_mentions, user.id, user.created_at, user.description,
+                user.favourites_count, user.followers_count,
+                user.friends_count, user.statuses_count,
+                user.listed_count, user.time_zone,
+                user.verified, user.geo_enabled,
+                user.lang, user.location,
+                user.screen_name))
             cursor.close()
             self.connection.commit()
         except Exception as inst:
@@ -126,8 +127,8 @@ class TweetStreamListener(StreamListener):
 
 if __name__ == '__main__':
     query_set = dict()
-    query_set['keyword'] = ['obama']
-    query_set['user'] = []
+    query_set['keyword'] = ['obama', 'usa']
+    query_set['user'] = ['326698989', '326802887', '314575095', '16573941', '15033883']
     queue = Queue.Queue()
     trainer = AdaptiveTweetClassifierTrainer(queue)
     l = TweetStreamListener(trainer, queue)
@@ -135,6 +136,7 @@ if __name__ == '__main__':
     auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
     stream = Stream(auth, l)
 
-    while 1:
-        query_set = trainer.get_query_set()
+    while True:
         stream.filter(follow=query_set['user'], track=query_set['keyword'])
+        query_set = trainer.get_query_set()
+        print "Model loading"
